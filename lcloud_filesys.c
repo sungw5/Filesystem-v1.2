@@ -18,6 +18,7 @@
 #include <lcloud_controller.h>
 #include <lcloud_cache.h>
 #include <lcloud_support.h>
+#include <lcloud_network.h>
 
 //bool typedef
 typedef int bool;
@@ -191,16 +192,15 @@ LCloudRegisterFrame create_lcloud_registers(uint64_t cb0, uint64_t cb1, uint64_t
 // Function     : extract_lcloud_registers
 // Description  : unpack the registers created with previous function(resp)
 //
-// Inputs       : resp, *b0, *b1, *c0, *c1, *c2, *d0, *d1
 
-uint64_t extract_lcloud_registers(LCloudRegisterFrame resp, uint64_t *b0, uint64_t *b1, uint64_t *c0, uint64_t *c1, uint64_t *c2, uint64_t *d0, uint64_t *d1 ){
-    *b0 = (resp >> 60) & 0xf;
-    *b1 = (resp >> 56) & 0xf;
-    *c0 = (resp >> 48) & 0xff;
-    *c1 = (resp >> 40) & 0xff;
-    *c2 = (resp >> 32) & 0xff;
-    *d0 = (resp >> 16) & 0xffff;
-    *d1 = (resp & 0xffff);
+uint64_t extract_lcloud_registers(LCloudRegisterFrame resp){
+    b0 = (resp >> 60) & 0xf;
+    b1 = (resp >> 56) & 0xf;
+    c0 = (resp >> 48) & 0xff;
+    c1 = (resp >> 40) & 0xff;
+    c2 = (resp >> 32) & 0xff;
+    d0 = (resp >> 16) & 0xffff;
+    d1 = (resp & 0xffff);
     
     return 0;
 }
@@ -243,8 +243,8 @@ int do_read(int did, int sec, int blk, char *buf){
 
     frm = create_lcloud_registers(0, 0 ,LC_BLOCK_XFER ,did, LC_XFER_READ, sec, blk); 
 
-    if( (frm == -1) || ((rfrm = lcloud_io_bus(frm, buf)) == -1) || 
-    (extract_lcloud_registers(rfrm, &b0, &b1, &c0, &c1, &c2, &d0, &d1)) || (b0 != 1) || (b1 != 1) || (c0 != LC_BLOCK_XFER)){
+    if( (frm == -1) || ((rfrm = client_lcloud_bus_request(frm, buf)) == -1) || 
+    (extract_lcloud_registers(rfrm)) || (b0 != 1) || (b1 != 1) || (c0 != LC_BLOCK_XFER)){
         logMessage(LOG_ERROR_LEVEL, "LC failure reading blkc [%d/%d/%d].", did, sec, blk);
         return(-1);
     }
@@ -266,8 +266,8 @@ int do_write(int did, int sec, int blk, char *buf){
 
     frm = create_lcloud_registers(0, 0 ,LC_BLOCK_XFER ,did, LC_XFER_WRITE, sec, blk);  
 
-    if( (frm == -1) || ((rfrm = lcloud_io_bus(frm, buf)) == -1) ||   
-    (extract_lcloud_registers(rfrm, &b0, &b1, &c0, &c1, &c2, &d0, &d1)) || (b0 != 1) || (b1 != 1) || (c0 != LC_BLOCK_XFER)){ 
+    if( (frm == -1) || ((rfrm = client_lcloud_bus_request(frm, buf)) == -1) ||   
+    (extract_lcloud_registers(rfrm)) || (b0 != 1) || (b1 != 1) || (c0 != LC_BLOCK_XFER)){ 
         logMessage(LOG_ERROR_LEVEL, "LC failure writing blkc [%d/%d/%d].", did, sec, blk);
         return(-1);
     }
@@ -300,8 +300,8 @@ int32_t lcpoweron(void){
 
     // Do Operation - PowerOn
     frm = create_lcloud_registers(0, 0 ,LC_POWER_ON ,0, 0, 0, 0); 
-    rfrm = lcloud_io_bus(frm, NULL);
-    extract_lcloud_registers(rfrm, &b0, &b1, &c0, &c1, &c2, &d0, &d1);
+    rfrm = client_lcloud_bus_request(frm, NULL);
+    extract_lcloud_registers(rfrm);
 
     isDeviceOn = true;
     bool first = true; //check if is calling probeID first time
@@ -324,8 +324,8 @@ int32_t lcpoweron(void){
 
     // Do Operation - Devprobe
     frm = create_lcloud_registers(0, 0 ,LC_DEVPROBE ,0, 0, 0, 0); 
-    rfrm = lcloud_io_bus(frm, NULL);
-    extract_lcloud_registers(rfrm, &b0, &b1, &c0, &c1, &c2, &d0, &d1); //after extract I get probed d0 (22048)
+    rfrm = client_lcloud_bus_request(frm, NULL);
+    extract_lcloud_registers(rfrm); //after extract I get probed d0 (22048)
 
     //---------------------- Device init ----------------------------//
     do{ //find out each multiple devices' number
@@ -340,9 +340,9 @@ int32_t lcpoweron(void){
         //logMessage(LcControllerLLevel, "Found device [%d] in cloud probe.", devinfo->did);
 
         frm = create_lcloud_registers(0, 0 ,LC_DEVINIT ,devinfo[n].did, 0, 0, 0); 
-        rfrm = lcloud_io_bus(frm, NULL);
+        rfrm = client_lcloud_bus_request(frm, NULL);
         reserved0 = d0; // reserve d0 after probeID function
-        extract_lcloud_registers(rfrm, &b0, &b1, &c0, &c1, &c2, &d0, &d1);
+        extract_lcloud_registers(rfrm);
         devinfo[n].maxsec = d0;
         devinfo[n].maxblk = d1;
         logMessage(LcControllerLLevel, "Found device [did=%d, secs=%d, blks=%d] in cloud probe.", devinfo[n].did, d0, d1);
@@ -831,7 +831,7 @@ int lcshutdown( void ) {
 
     //Poweroff
     frm = create_lcloud_registers(0, 0 ,LC_POWER_OFF ,0, 0, 0, 0); 
-    lcloud_io_bus(frm, NULL);
+    client_lcloud_bus_request(frm, NULL);
 
     // close cache
     lcloud_closecache();

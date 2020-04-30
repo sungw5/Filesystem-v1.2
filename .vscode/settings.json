@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "cmpsc311_log.h": "c"
+        "cmpsc311_log.h": "c",
+        "assert.h": "c",
+        "stdint.h": "c",
+        "lcloud_network.h": "c"
     }
 }
