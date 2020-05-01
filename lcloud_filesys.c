@@ -24,11 +24,12 @@
 typedef int bool;
 #define true 1
 #define false 0
+int full = -1;
 
 
 static LCloudRegisterFrame frm, rfrm, b0, b1, c0, c1, c2, d0, d1;
 int numdevice; //number of devices // there are 5 devices in assign3
-#define filenum 64
+#define filenum 256
 //#define devicenum 16
 int devicenum = 0;
 
@@ -125,6 +126,7 @@ void findsamefileblock(int n, LcFHandle fh){ //argument = readnow
 
             }
         }
+        n++;
     }while(n<devicenum);
 }
 
@@ -149,6 +151,7 @@ void wfindsamefileblock(int n, LcFHandle fh){ //argument = now
 
             }
         }
+        n++;
     }while(n<devicenum);
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -157,13 +160,34 @@ void wfindsamefileblock(int n, LcFHandle fh){ //argument = now
 // Description  : move onto next device
 
 void nextdevice(int *n){
-    if(*n>=devicenum-1){
-        *n=0;
+
+    
+    while(*n <devicenum){
+        if(*n != full){
+            if(*n>=devicenum-1){
+                *n=0;
+            }
+            else{
+                (*n)++;
+            }
+        }
+        
+        if(*n>=devicenum-1) *n=0;
+        else (*n)++;
+
+        if(*n != full) break;
     }
-    else{
-        (*n)++;
-    }
+    
 }
+
+// void nextdevice(int *n){
+//     if(*n>=devicenum-1){
+//         *n=0;
+//     }
+//     else{
+//         (*n)++;
+//     }
+// }
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -753,7 +777,16 @@ int lcwrite( LcFHandle fh, char *buf, size_t len ) {
 
 
         // if device is full, go to next device
+        // if(devinfo[now].storage[devinfo[now].maxsec-1][devinfo[now].maxblk-1] == 2){
+        //     nextdevice(&now);
+        // }
         if(devinfo[now].storage[devinfo[now].maxsec-1][devinfo[now].maxblk-1] == 2){
+            full = now;
+        }
+        if(findnextfreedev == true){
+            now = prevfilesnow;
+        }
+        else{
             nextdevice(&now);
         }
     
