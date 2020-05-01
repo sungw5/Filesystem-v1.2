@@ -52,7 +52,7 @@ typedef struct{
 
 
 }filesys;
-filesys finfo[filenum]; //file structure
+filesys *finfo; //file structure
 
 typedef struct{
     LcDeviceId did;
@@ -421,6 +421,7 @@ int32_t lcpoweron(void){
     }while(n<devicenum);
 
     ////////////////// file initialize //////////////////////
+    finfo = (filesys *)malloc(sizeof(filesys) * filenum);
     for(fd=0; fd<filenum; fd++){
 
         finfo[fd].isopen = false;
