@@ -38,7 +38,7 @@ int socket_handle = -1;
 // Description  : unpack the registers created with previous function(resp)
 //
 
-uint64_t extract_lcloud_registers(LCloudRegisterFrame resp){
+uint64_t extract_network_registers(LCloudRegisterFrame resp){
     b0 = (resp >> 60) & 0xf;                    // 0 - sending / 1 - responding
     b1 = (resp >> 56) & 0xf;                    // 0 - sending to device / 1 - success from device
     c0 = (resp >> 48) & 0xff;   /*****  OPCODE : 0 - POWERON / 1 - DEVPROBE / 2 - DEVINIT / 3 - BLOCK_XFER  *****/
@@ -83,7 +83,7 @@ LCloudRegisterFrame client_lcloud_bus_request( LCloudRegisterFrame reg, void *bu
             logMessage(LOG_ERROR_LEVEL, "Error on address setup\n");
             return -1;
         }
-        logMessage(LOG_INFO_LEVEL, "IPv4: %s\n", inet_ntoa(caddr.sin_addr));
+        logMessage(LOG_INFO_LEVEL, "IPv4: %s/%d\n", inet_ntoa(caddr.sin_addr), ntohs(caddr.sin_port));
         
 
         // (b) Create the socket  - socket() 
@@ -98,9 +98,11 @@ LCloudRegisterFrame client_lcloud_bus_request( LCloudRegisterFrame reg, void *bu
             logMessage(LOG_ERROR_LEVEL, "Error on connection\n");
             return -1;
         }
+        logMessage(LOG_INFO_LEVEL, "Successfully made a connection...");
+        socket_handle = 1;
     }
 
-    LCloudRegisterFrame opcode = extract_lcloud_registers(reg); 
+    LCloudRegisterFrame opcode = extract_network_registers(reg); 
 
     // read( fd, buf, len ) - to receive data FROM a remote process over the network
     // write( fd, buf, len ) - to send data TO a remote process over the network
@@ -118,14 +120,16 @@ LCloudRegisterFrame client_lcloud_bus_request( LCloudRegisterFrame reg, void *bu
         //          256-byte block (Data read from that frame)
 
     LCloudRegisterFrame networkbyte = htonll64(reg); // convert reg to 'network format' (host to network)
+    //LCloudRegisterFrame hostbyte = ntohll64(networkbyte);
 
     if(opcode == LC_BLOCK_XFER && c2 == LC_XFER_READ){
+        logMessage(LOG_INFO_LEVEL, "READ connection start...");
 
         if(write(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to send the register reg to the network (READ FAIL)");
             return -1;
         }
-        logMessage(LOG_INFO_LEVEL, "Sent the register(%d", ntohll64(networkbyte));
+        logMessage(LOG_INFO_LEVEL, "Sent the register(%d)", ntohll64(networkbyte), caddr.sin_port);
 
         if(read(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to receive the register reg (READ FAIL)");
@@ -150,12 +154,13 @@ LCloudRegisterFrame client_lcloud_bus_request( LCloudRegisterFrame reg, void *bu
         // RECEIVE: (reg) -> Host format
 
     else if(opcode == LC_BLOCK_XFER && c2 == LC_XFER_WRITE){
+        logMessage(LOG_INFO_LEVEL, "WRITE connection start...");
 
         if(write(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to send the register reg to the network (WRITE FAIL)");
             return -1;
         }
-        logMessage(LOG_INFO_LEVEL, "Sent the register(%d", ntohll64(networkbyte));
+        logMessage(LOG_INFO_LEVEL, "Sent the register(%d)", ntohll64(networkbyte));
 
         if(write(sockfd, buf, LC_DEVICE_BLOCK_SIZE) != LC_DEVICE_BLOCK_SIZE){
             logMessage(LOG_ERROR_LEVEL, "Failed to write to the block (WRITE FAIL)");
@@ -181,12 +186,13 @@ LCloudRegisterFrame client_lcloud_bus_request( LCloudRegisterFrame reg, void *bu
         // close(socket_handle)
     
     else if(opcode == LC_POWER_OFF){
+        logMessage(LOG_INFO_LEVEL, "POWEROFF connection start...");
 
         if(write(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to send the register reg to the network (POWEROFF FAIL)");
             return -1;
         }
-        logMessage(LOG_INFO_LEVEL, "Sent the register(%d", ntohll64(networkbyte));
+        logMessage(LOG_INFO_LEVEL, "Sent the register(%d)", ntohll64(networkbyte));
 
         if(read(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to receive the register reg (POWEROFF FAIL)");
@@ -205,12 +211,14 @@ LCloudRegisterFrame client_lcloud_bus_request( LCloudRegisterFrame reg, void *bu
         // RECEIVE: (reg) -> Host format
 
     else{
+        logMessage(LOG_INFO_LEVEL, "POWERON/DEVINIT/OTHER connection start...");
 
         if(write(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to send the register reg to the network (PROBE or OTHER FAIL)");
             return -1;
         }
-        logMessage(LOG_INFO_LEVEL, "Sent the register(%d", ntohll64(networkbyte));
+        logMessage(LOG_INFO_LEVEL, "Sent the register(%d)", ntohll64(networkbyte));
+        
 
         if(read(sockfd, &networkbyte, sizeof(networkbyte)) != sizeof(networkbyte)){
             logMessage(LOG_ERROR_LEVEL, "Failed to receive the register reg (PROBE or OTHER FAIL)");

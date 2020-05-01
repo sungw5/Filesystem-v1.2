@@ -28,8 +28,9 @@ typedef int bool;
 
 static LCloudRegisterFrame frm, rfrm, b0, b1, c0, c1, c2, d0, d1;
 int numdevice; //number of devices // there are 5 devices in assign3
-#define filenum 33
-#define devicenum 5
+#define filenum 64
+//#define devicenum 16
+int devicenum = 0;
 
 
 //LcDeviceId did;
@@ -207,6 +208,25 @@ uint64_t extract_lcloud_registers(LCloudRegisterFrame resp){
 
 ////////////////////////////////////////////////////////////////////////////////
 //
+// Function     : countdevice
+// Description  : count how many devices are there
+//
+// Inputs       : id_c1
+uint8_t countdevice(uint16_t id0){
+    uint16_t value = id0;
+    int count=0;
+    while(value != 0){
+        if((value&1) == 1){
+            count++;
+        }
+        value = value >>1;
+    }
+    return count;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
 // Function     : probeID
 // Description  : check the device ID
 //
@@ -307,6 +327,12 @@ int32_t lcpoweron(void){
     bool first = true; //check if is calling probeID first time
 
     int n=0; //devinit loop counter
+
+    // Do Operation - Devprobe
+    frm = create_lcloud_registers(0, 0 ,LC_DEVPROBE ,0, 0, 0, 0); 
+    rfrm = client_lcloud_bus_request(frm, NULL);
+    extract_lcloud_registers(rfrm); //after extract I get probed d0 (22048)
+    devicenum = countdevice(d0);
     
     devinfo = (device *)malloc(sizeof(device) * devicenum);
     for(i=0; i<devicenum; i++){
@@ -322,10 +348,6 @@ int32_t lcpoweron(void){
         devinfo[i].devread = 0;
     }
 
-    // Do Operation - Devprobe
-    frm = create_lcloud_registers(0, 0 ,LC_DEVPROBE ,0, 0, 0, 0); 
-    rfrm = client_lcloud_bus_request(frm, NULL);
-    extract_lcloud_registers(rfrm); //after extract I get probed d0 (22048)
 
     //---------------------- Device init ----------------------------//
     do{ //find out each multiple devices' number
@@ -347,7 +369,6 @@ int32_t lcpoweron(void){
         devinfo[n].maxblk = d1;
         logMessage(LcControllerLLevel, "Found device [did=%d, secs=%d, blks=%d] in cloud probe.", devinfo[n].did, d0, d1);
 
-        
 
         //------------2d array dynamic allocation----------//
         devinfo[n].storage = (char **) malloc(sizeof(char*) * devinfo[n].maxsec); //ex. did = 5,  blk = 64
