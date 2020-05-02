@@ -45,6 +45,7 @@ cachedata cdata;
 
 int cachesize; // current cache size
 int maxblock;
+int mostrecent=0;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -58,14 +59,15 @@ int findLRU(){
     int i;
 
     cdata.currentLRUage = cacheinfo[maxblock-1].howold;
-    for(i=maxblock-1; i>0; i--){
-        // find oldest cache item from the end
-        if(cdata.currentLRUage < cacheinfo[i].howold){
+    for(i=maxblock-1; i>=0; i--){
+        // find oldest cache item from the end (smallest index)
+        if(cdata.currentLRUage > cacheinfo[i].howold){
             cdata.currentLRUage = cacheinfo[i].howold; //update current LRU value as oldest time
             cdata.currentLRU = i;
         }
     }
     return cdata.currentLRU;
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -102,14 +104,11 @@ int findcache(LcDeviceId did, uint16_t sec, uint16_t blk){
 
 char * lcloud_getcache( LcDeviceId did, uint16_t sec, uint16_t blk ) {
     int i;
-    for(i=0; i<cachesize; i++){
-        cacheinfo[i].howold += 1; // every caches get old
-    }
+    mostrecent++;
     
     for(i=0; i<cachesize; i++){
         // if cache exists return block, otherwise get out returning NULL
         if(cacheinfo[i].did == did && cacheinfo[i].sec == sec && cacheinfo[i].blk == blk){
-            cacheinfo[i].howold = 0; // used, so reset it fresh
             cdata.hits++; cdata.numaccess++;
             logMessage(LOG_INFO_LEVEL, "Getting found cache item on index %d, length %d", i, LC_DEVICE_BLOCK_SIZE);
             logMessage(LOG_INFO_LEVEL, "[INFO] LionCloud Cache ** HIT ** : (%d/%d/%d) index = %d", did, sec, blk, i);
@@ -139,9 +138,7 @@ char * lcloud_getcache( LcDeviceId did, uint16_t sec, uint16_t blk ) {
 int lcloud_putcache( LcDeviceId did, uint16_t sec, uint16_t blk, char *block ) {
     int i;
     int LRU;
-    for(i=0; i<cachesize; i++){
-        cacheinfo[i].howold += 1; // every caches get old
-    }
+    mostrecent++;
 
     for(i=0; i<maxblock; i++){
 
@@ -149,7 +146,7 @@ int lcloud_putcache( LcDeviceId did, uint16_t sec, uint16_t blk, char *block ) {
         if(cacheinfo[i].did == did && cacheinfo[i].sec == sec && cacheinfo[i].blk == blk){
             cdata.hits++; cdata.numaccess++;
             cacheinfo[i].cacheline = i;
-            cacheinfo[i].howold = 0; // reset to fresh cache
+            cacheinfo[i].howold = mostrecent;
             logMessage(LOG_INFO_LEVEL, "Getting found cache item on index %d, length %d", i, LC_DEVICE_BLOCK_SIZE);
             logMessage(LOG_INFO_LEVEL, "Removing found cache item on index %d, length %d", i, LC_DEVICE_BLOCK_SIZE );
             memcpy(cacheinfo[i].cacheblock, block, LC_DEVICE_BLOCK_SIZE); // update cache with new writing data
@@ -162,18 +159,18 @@ int lcloud_putcache( LcDeviceId did, uint16_t sec, uint16_t blk, char *block ) {
     if(cachesize == LC_CACHE_MAXBLOCKS){
         cdata.misses++; cdata.numaccess++;
         LRU = findLRU();
-        cacheinfo[i].cacheline = LRU;
-
+        cacheinfo[LRU].cacheline = LRU;
+        cacheinfo[LRU].howold = mostrecent;
+        
         // set inserting cache info
         cacheinfo[LRU].did = did;
         cacheinfo[LRU].sec = sec;
         cacheinfo[LRU].blk = blk;
         memcpy(cacheinfo[LRU].cacheblock, block, LC_DEVICE_BLOCK_SIZE); // update LRU cache with new data
-        cacheinfo[LRU].howold = 0; // reset to fresh cache
 
         logMessage(LOG_INFO_LEVEL, "Getting cache item (not found!)");
         logMessage(LOG_INFO_LEVEL, "Ejecting cache item index %d, length %d", LRU, LC_DEVICE_BLOCK_SIZE);
-        logMessage(LOG_INFO_LEVEL, "Cache state [%d items, %d bytes used]", cdata.numitem, LC_DEVICE_BLOCK_SIZE);
+        logMessage(LOG_INFO_LEVEL, "Cache state [%d items, %d bytes used]", cdata.numitem, cdata.bytesused);
         logMessage(LOG_INFO_LEVEL, "Added cache item index %d, length %d", LRU, LC_DEVICE_BLOCK_SIZE);
         logMessage(LOG_INFO_LEVEL, "LionCloud Cache success inserting cache item (%d/%d/%d) index= %d", did,sec,blk,LRU);
     }
@@ -183,7 +180,8 @@ int lcloud_putcache( LcDeviceId did, uint16_t sec, uint16_t blk, char *block ) {
     else{
         
         cdata.misses++; cdata.numaccess++;
-        cacheinfo[i].cacheline = cachesize;
+        cacheinfo[cachesize].cacheline = cachesize;
+        cacheinfo[cachesize].howold = mostrecent;
         cdata.numitem += 1; // increment the number of cache item
         
 
@@ -193,13 +191,13 @@ int lcloud_putcache( LcDeviceId did, uint16_t sec, uint16_t blk, char *block ) {
         cacheinfo[cachesize].blk = blk;
         memcpy(cacheinfo[cachesize].cacheblock, block, LC_DEVICE_BLOCK_SIZE); //put data into the cache
         cdata.bytesused += sizeof(cacheinfo[cachesize].cacheblock);
-        cacheinfo[cachesize].howold = 0; // fresh cache
-        cachesize += 1; // increment the cache size
+
+        cachesize++; // increment the cache size
     
         logMessage(LOG_INFO_LEVEL, "Getting cache item (not found!)");
         logMessage(LOG_INFO_LEVEL, "Cache state [%d items, %d bytes used]", cdata.numitem, cdata.bytesused);
-        logMessage(LOG_INFO_LEVEL, "Added cache item index %d, length %d", i, LC_DEVICE_BLOCK_SIZE);
-        logMessage(LOG_INFO_LEVEL, "LionCloud Cache success inserting cache item (%d/%d/%d) index= %d", did,sec,blk,i);
+        logMessage(LOG_INFO_LEVEL, "Added cache item index %d, length %d", cachesize, LC_DEVICE_BLOCK_SIZE);
+        logMessage(LOG_INFO_LEVEL, "LionCloud Cache success inserting cache item (%d/%d/%d) index= %d", did,sec,blk,cachesize);
     }
     
     
@@ -279,7 +277,6 @@ int lcloud_closecache( void ) {
 
     //free
     free(cacheinfo);
-
 
 
     /* Return successfully */

@@ -378,6 +378,7 @@ int32_t lcpoweron(void){
     
         if(first == true){
             devinfo[n].did = probeID(d0);
+
             first = false;
         }
         else{
@@ -560,7 +561,7 @@ int lcread( LcFHandle fh, char *buf, size_t len ) {
         }
 
         // if found in cache, get it
-        if(findcache(devinfo[readnow].did, devinfo[readnow].rsec, devinfo[readnow].rblk) != 0){
+        if(lcloud_getcache(devinfo[readnow].did, devinfo[readnow].rsec, devinfo[readnow].rblk) != NULL){
             memcpy(tempbuf, lcloud_getcache(devinfo[readnow].did, devinfo[readnow].rsec, devinfo[readnow].rblk), 256);
             memcpy(buf, tempbuf+offset, size);
         }
